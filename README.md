@@ -1,4 +1,4 @@
-# axelar-crosschain-gas-abstraction
+# Axelar Crosschain Gas Abstraction
 DevRel Specialist: Take Home Assignment
 
 # Cross-Chain Gas Payment System
