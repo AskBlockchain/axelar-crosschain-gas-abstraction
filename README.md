@@ -133,7 +133,7 @@ Gateway tokens are a collection of well-known ERC-20 tokens (such as USDC) that 
 ## Smart Contract Example (Minimal Version)
 
 Below is a Solidity contract snippet that demonstrates how to process a gas payment request using Axelar GMP.
-See ```solidity code_snippet.sol```
+See ```code_snippet.sol```
 
 ### Explanation of the Contract
 1. **What the Contract Does**:
