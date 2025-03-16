@@ -1,7 +1,3 @@
-Certainly! Here's a proofread version of the provided text with minor corrections for grammar, clarity, and consistency:
-
----
-
 # Cross-Chain Gas Payment System
 
 ## Overview
@@ -165,4 +161,3 @@ This document outlines a modular and scalable system for enabling cross-chain ga
 
 ---
 
-Let me know if you'd like further refinements or clarifications!
