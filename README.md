@@ -1,4 +1,4 @@
-# Cross-Chain Gas Payment System
+# Axelar Cross-Chain Gas Payment System
 
 ## Overview
 The goal of this system is to allow users to pay gas fees on one blockchain (e.g., Ethereum) using tokens from another blockchain (e.g., Avalanche). This solution leverages Axelar's interoperability framework, enabling secure and seamless communication between blockchains. The design prioritizes modularity, scalability, and developer-friendliness while ensuring security and usability.
