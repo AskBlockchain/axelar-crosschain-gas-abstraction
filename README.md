@@ -133,9 +133,7 @@ Gateway tokens are a collection of well-known ERC-20 tokens (such as USDC) that 
 ## Smart Contract Example (Minimal Version)
 
 Below is a Solidity contract snippet that demonstrates how to process a gas payment request using Axelar GMP.
-
-### Contract Code
-See code_snippet.sol
+See ```solidity code_snippet.sol```
 
 ### Explanation of the Contract
 1. **What the Contract Does**:
@@ -150,7 +148,6 @@ See code_snippet.sol
    - `_executeWithToken`: Automatically executed on the destination chain by Axelar relayers. It processes the incoming message and tokens, converting them into the native gas token for gas payment.
 
 3. **Assumptions and Simplifications**:
-   - A decentralized exchange (DEX) exists on the destination chain for swapping bridged tokens into the native gas token.
    - Security measures like reentrancy guards and detailed error handling are omitted for simplicity.
    - Pre-funding mechanisms and advanced fee estimation are not included in this minimal example.
 
