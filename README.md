@@ -1,14 +1,14 @@
 # Axelar Cross-Chain Gas Payment System
 
 ## Overview
-The goal of this system is to allow users to pay gas fees on one blockchain (e.g., Ethereum) using tokens from another blockchain (e.g., Avalanche). This solution leverages Axelar's interoperability framework, enabling secure and seamless communication between blockchains. The design prioritizes modularity, scalability, and developer-friendliness while ensuring security and usability.
+The goal of this system is to allow users to pay gas fees on one blockchain (e.g. Ethereum) using tokens from another blockchain (e.g. Avalanche). This solution leverages Axelar's interoperability framework, enabling secure and seamless communication between blockchains. The design prioritizes modularity, scalability, and developer-friendliness while ensuring security and usability.
 
 ---
 
 ## Problem Statement
 
 ### Why Do Users Need Native Gas Tokens on Every Chain?
-Users interacting with decentralized applications (dApps) across multiple blockchains must hold the native gas token of each blockchain they engage with (e.g., ETH for Ethereum, MATIC for Polygon, AVAX for Avalanche). Without these tokens, users cannot execute transactions or interact with smart contracts.
+Users interacting with decentralized applications (dApps) across multiple blockchains must hold the native gas token of each blockchain they engage with (e.g. ETH for Ethereum, MATIC for Polygon, AVAX for Avalanche). Without these tokens, users cannot execute transactions or interact with smart contracts.
 
 ### How Does This Impact User Experience?
 1. **Friction**: Users need to acquire and manage multiple tokens, complicating their onboarding process.
@@ -27,7 +27,7 @@ These solutions either fail to fully abstract gas fees or introduce additional c
 ## System Design - Key Components
 
 ### User Interaction
-1. The user specifies the amount of gas they want to pay on Chain A and selects a stablecoin (e.g., USDC) from Chain B as payment in one transaction.
+1. The user specifies the amount of gas they want to pay on Chain A and selects a stablecoin (e.g. USDC) from Chain B as payment in one transaction.
 
 ### Axelar General Message Passing (GMP)
 Axelar’s General Message Passing (GMP) enables developers building on one chain to call any function on any other connected chain.  
@@ -49,7 +49,7 @@ Whether for token transfers or General Message Passing (GMP), every cross-chain 
 
 To simplify paying for transaction pricing through the pipeline, Axelar offers two general solutions:
 - For token transfers, a fixed “relayer fee” is deducted from the amount of assets being transferred cross-chain.
-- For General Message Passing (callContract and callContractWithToken), a chain-agnostic gas-relaying service is implemented to accept gas payments from users on the source chain in its native currency.
+- For General Message Passing (`callContract` and `callContractWithToken`), a chain-agnostic gas-relaying service is implemented to accept gas payments from users on the source chain in its native currency.
 
 ### Interchain Token Transfers
 The Interchain Token Service (ITS) allows ERC-20 tokens to be available on multiple blockchains. It preserves native token qualities while enabling easy management of token features and supply.  
