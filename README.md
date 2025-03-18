@@ -151,8 +151,10 @@ Avalanche Testnet (Chain A):
     - Gas Service Address : 0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6
 
 BNB Testnet (Chain B):
-    - Gateway Address : 0x4D147dCb984e6affEEC47e44293DA442580A3Ec0
-    - Gas Service Address : 0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6
+    - Gateway Address : 
+    0x4D147dCb984e6affEEC47e44293DA442580A3Ec0
+    - Gas Service Address : 
+    0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6
 
 Deploy the contract on both chains with the respective gateway and gas service addresses.
 
