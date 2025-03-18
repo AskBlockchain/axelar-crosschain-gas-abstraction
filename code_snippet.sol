@@ -5,6 +5,7 @@ import { AxelarExecutable } from '@axelar-network/axelar-gmp-sdk-solidity/contra
 import { IAxelarGasService } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IAxelarGasService.sol';
 import { IERC20 } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IERC20.sol';
 import { SafeTokenTransfer, SafeTokenTransferFrom } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/libs/SafeTransfer.sol';
+import { IAxelarGateway } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IAxelarGateway.sol';
 
 contract USDCInterchainTransfer is AxelarExecutable {
     // Address of the USDC token on Avalanche Testnet
@@ -34,11 +35,13 @@ contract USDCInterchainTransfer is AxelarExecutable {
      * @param destinationAddress Address on the destination chain to receive the USDC
      * @param amount Amount of USDC to transfer
      */
-    function sendUSDC(
+    function callContractWithToken(
         string calldata destinationChain,
         string calldata destinationAddress,
+        bytes calldata payload,
+        string calldata symbol,
         uint256 amount
-    ) external payable {
+    ) external payable override {
         require(amount > 0, "Amount must be greater than zero");
 
         // Transfer USDC from the sender to this contract
@@ -47,23 +50,61 @@ contract USDCInterchainTransfer is AxelarExecutable {
         // Approve the Axelar Gateway to spend the USDC
         SafeTokenTransfer.safeApprove(usdc, address(gateway()), amount);
 
-        // Estimate and pay for the gas required for the cross-chain transfer
-        bytes memory payload = abi.encode(destinationAddress);
+        // Pay for the gas required for the cross-chain transfer
         gasService.payNativeGasForContractCallWithToken{value: msg.value}(
             address(this),
             destinationChain,
             destinationAddress,
             payload,
-            "USDC",
+            symbol,
             amount,
             msg.sender
         );
 
         // Initiate the cross-chain transfer
-        gateway().callContractWithToken(destinationChain, destinationAddress, payload, "USDC", amount);
+        gateway().callContractWithToken(destinationChain, destinationAddress, payload, symbol, amount);
 
         emit USDCSent(destinationChain, destinationAddress, amount);
         emit USDCTransferred(msg.sender, amount);
+    }
+
+    /**
+     * @notice Pays gas for a contract call with a token
+     * @param sender Sender address
+     * @param destinationChain Name of the destination chain
+     * @param destinationAddress Address on the destination chain
+     * @param payload Encoded payload
+     * @param symbol Token symbol (e.g., "USDC")
+     * @param amount Token amount to transfer
+     * @param gasToken Address of the gas token
+     * @param gasFeeAmount Amount of gas fee
+     * @param refundAddress Address to refund leftover gas
+     */
+    function payGasForContractCallWithToken(
+        address sender,
+        string calldata destinationChain,
+        string calldata destinationAddress,
+        bytes calldata payload,
+        string memory symbol,
+        uint256 amount,
+        address gasToken,
+        uint256 gasFeeAmount,
+        address refundAddress
+    ) external override {
+        emit GasPaidForContractCallWithToken(
+            sender,
+            destinationChain,
+            destinationAddress,
+            keccak256(payload),
+            symbol,
+            amount,
+            gasToken,
+            gasFeeAmount,
+            refundAddress
+        );
+
+        // Transfer the gas fee from the sender to this contract
+        IERC20(gasToken).safeTransferFrom(sender, address(this), gasFeeAmount);
     }
 
     /**
@@ -83,8 +124,6 @@ contract USDCInterchainTransfer is AxelarExecutable {
         string memory destinationAddress = abi.decode(payload, (string));
 
         // Mint or transfer the USDC to the recipient on the destination chain
-        // This assumes the destination chain has a corresponding USDC contract
-        // and the Axelar Gateway handles the minting process.
         uint256 amount = gateway().tokenBalance("USDC", address(this));
         SafeTokenTransfer.safeTransfer(usdc, destinationAddress, amount);
 

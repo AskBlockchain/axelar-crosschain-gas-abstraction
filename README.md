@@ -146,6 +146,20 @@ Gateway tokens are a collection of well-known ERC-20 tokens (such as USDC) that 
 
 ## Smart Contract Example & Deployment Details
 
+**Function Names :**
++ The `callContractWithToken` function is used to initiate the cross-chain transfer.
++ The payGasForContractCallWithToken function handles gas payments for the transaction.
+
+**Event Emission :**
++ The GasPaidForContractCallWithToken event is emitted when gas is paid for the transaction.
+
+**Payload Handling :**
++ The payload contains the encoded destination address, which is decoded in the _execute function on the destination chain.
+
+**Gas Payment :**
++ The payNativeGasForContractCallWithToken function ensures that the gas fees are paid using native tokens (AVAX).
+
+
 Avalanche Testnet (Chain A):
     - Gateway Address : 0xC249632c2D40b9001FE907806902f63038B737Ab
     - Gas Service Address : 0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6
@@ -163,7 +177,13 @@ npx hardhat deploy --network avalanche-testnet --constructor-args <gateway-addre
 ```
 2. Send USDC from Avalanche Testnet to BNB Testnet:
 ```javascript
-contract.sendUSDC{value: gasFee}("binance", "0xRecipientOnBNB", 100e6);
+contract.callContractWithToken{value: gasFee}(
+    "binance",
+    "0xRecipientOnBNB",
+    abi.encode("0xRecipientOnBNB"),
+    "USDC",
+    100e6
+);
 ```
 Below is a Solidity contract snippet that demonstrates how to process a gas payment request using Axelar GMP.
 See ```code_snippet.sol```
