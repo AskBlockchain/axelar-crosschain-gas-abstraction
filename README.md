@@ -52,7 +52,7 @@ To simplify paying for transaction pricing through the pipeline, Axelar offers t
 - For General Message Passing (`callContract` and `callContractWithToken`), a chain-agnostic gas-relaying service is implemented to accept gas payments from users on the source chain in its native currency.
 
 ### Interchain Token Transfers
-The Interchain Token Service (ITS) allows ERC-20 tokens to be available on multiple blockchains. It preserves native token qualities while enabling easy management of token features and supply.  
+The Interchain Token Service (ITS) allows ERC-20 tokens to be available on multiple blockchains. It preserves native token qualities while enabling easy management of token features and supply. The interchainTransfer()` function sends a cross-chain transfer via the Interchain Token Service.
 Interchain Tokens run on open-source code via smart contracts on a public blockchain secured by a dynamic validator set. With ITS, you can have multiple blockchains with canonical versions of your token that all share a single EVM address.  
 You can either create new Interchain Tokens from scratch or update tokens that already exist on a supported blockchain.
 
@@ -80,19 +80,32 @@ The `callContractWithToken` function call includes:
 4. The symbol of the token to transfer, which must be a supported (Interchain Token Service) asset.
 5. The amount of the token to transfer.
 
+### Cross-Chain Process
+
+**Setup**
+1. The destination application contract implements the `AxelarExecutable.sol` to receive the cross-chain message.
+2. The destination application contract stores the address of the local Gateway contract.
+
 **Steps**
-- **At the source chain**:
-  - Call the `callContract` (or `callContractWithToken`) function on the Axelar Gateway contract to initiate a call. Once the call is initiated, the user can track its status at [https://axelarscan.io/gmp/[txHash]](https://axelarscan.io/gmp/[txHash]) or programmatically via the AxelarJS SDK.
-  - Prepay the gas for the decentralized Axelar consensus and the necessary transactions to approve and execute on the destination chain.
-  - The call enters the Axelar Gateway from the source chain.
-  
-- **At the Axelar Network**:
-  The Axelar network confirms the call and utilizes funds from the source chain’s native (USDC ERC-20) token reserves to cover the gas costs on both the Axelar blockchain and the destination chain (Chain A).
+ **At the source chain (Chain B)**:
+  1. Call the `callContract` (or `callContractWithToken`) function on the Axelar Gateway contract to initiate a call. Once the call is initiated, the user can track its status at [https://axelarscan.io/gmp/[txHash]](https://axelarscan.io/gmp/[txHash]) or programmatically via the AxelarJS SDK.
+  2. Prepay the gas for the decentralized Axelar consensus and the necessary transactions to approve and execute on the destination chain.
+  3. The call enters the Axelar Gateway from the source chain.
+
+  **On Axelar Network**
+  1. A relayer monitors the `ContractCall` event and submits a transaction to the Axelar network to request validation. The relayer also stores the payload in a database, keyed by hash(payload) for later retrieval.
+  2. Axelar validators then vote on-chain to validate the ContractCall event content.
+  3. A relayer requests the Axelar network to prepare a command batch, including the pending payload approval (potentially batched with other messages), and requests validator signatures.
+  4. A signed batch of approved payloads is prepared on Axelar that anyone can view.
+  5. The Axelar network confirms the call and utilizes funds from the source chain’s native (USDC ERC-20) token reserves to cover the gas costs on both the Axelar blockchain and the destination chain (Chain A).
 
 - **At the destination chain (Chain A)**:
-  - The call is approved (Axelar validators come to a consensus by voting, and their votes and signatures are then passed to the destination chain), and the approval is relayed to the Axelar Gateway on the destination chain.
-  - The executor service relays and executes the approved call to the application’s Axelar Executable interface.
-  - If the paid gas is insufficient to approve or execute on the destination chain, Axelar offers monitoring and recovery steps to handle such scenarios.
+  1. A relayer submits the signed batch to the destination gateway contract, which records the approval of the payload hash and emits a `ContractCallApproved` event.
+  2. A trustless relayer service (can be anyone) listens for this event and calls IAxelarExecutable.execute() on the destination contract with the payload and other data as params.
+  3. If the paid gas is insufficient to approve or execute on the destination chain, Axelar offers monitoring and recovery steps to handle such scenarios.
+  4. The execute method on the destination contract verifies the call was indeed approved by Axelar validators by calling `validateContractCall()` from the AxelarExecutable where it’s defined on its Axelar gateway contract.
+  5. The gateway records that the destination application contract validated the approval and did not allow `validateContractCall` to be called again (to prevent replay of execute).
+  6. The destination application contract uses the payload to `_execute` its logic.
 
 ### Estimate and Pay Gas
 Gas estimation is the process of estimating the gas required to execute a transaction—specifically, a multichain transaction with Axelar. An application that wants Axelar to automatically execute contract calls on the destination chain must do the following:
@@ -109,14 +122,15 @@ Gas estimation is the process of estimating the gas required to execute a transa
 Axelar’s token transfer capabilities enable seamless bridging of USDC from Chain B to Chain A. Interchain Tokens are tokens deployed via the Interchain Token Service (ITS).  
 These tokens are relatively simple ERC-20 contracts with built-in ITS integration, making them bridgeable to other blockchains as soon as they are deployed. You can initiate an interchain transfer from your source chain to a destination chain by using the `interchainTransfer` method on the ITS contract.
 
+**Canonical Interchain Token**
+An Interchain Token is an ERC-20 token that can be transferred between blockchains, preserving native token qualities. At the core, an Interchain Token is an ERC-20 contract on a public blockchain secured by a dynamic validator set.
+A canonical Interchain Token is a token originally deployed on one chain that now has interchain capabilities through ITS. The Interchain Token Service wraps the token on the original chain to give it these capabilities, then duplicates the wrapped original on all other chains. This standardization ensures consistent behavior and enables interoperability between blockchains, allowing cross-chain transactions and interactions within blockchain networks that support various chains.
+
 **Token Managers**  
 Token Managers are contracts that facilitate the connection between your interchain token and the Interchain Token Service (ITS). For certain manager types, such as mint/burn Token Manager, the manager is the `msg.sender` of the transaction being executed on the destination chain for the token when it is bridged in.
 
-**Lock/Unlock**  
-Token integrations using the lock/unlock Token Manager will have their (USDC) token locked with their token’s manager.  
-Only a single lock/unlock manager can exist for a token. These token managers are best used in cases where a token has a “home chain” where the token can be locked.  
-On remote chains, users can use a wrapped version of that token, which derives its value from a locked token back on the home chain. Canonical tokens, such as those deployed via ITS, are examples where a lock/unlock token manager type is useful. When bridging tokens out of the destination chain (locking them at the manager), ITS will call the `transferTokenFrom()` function, which in turn will call the `safeTransferFrom()` function.  
-For this transaction to succeed, ITS must be approved to call the `safeTransferFrom()` function; otherwise, the call will revert.
+**Mint/Burn**  
+Minting refers to the creation of new tokens, typically increasing the total supply. Burning involves permanently removing tokens from circulation, reducing the total supply. In the Interchain Token Service, the contract’s Token Manager will mint new tokens on its chain when there are incoming token transfers, and burn the received tokens when there are outgoing token transfers.
 
 ---
 
@@ -130,8 +144,25 @@ Gateway tokens are a collection of well-known ERC-20 tokens (such as USDC) that 
 
 ---
 
-## Smart Contract Example (Minimal Version)
+## Smart Contract Example & Deployment Details
 
+Avalanche Testnet (Chain A):
+    Gateway Address : 0xC249632c2D40b9001FE907806902f63038B737Ab
+    Gas Service Address : 0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6
+BNB Testnet (Chain B):
+    Gateway Address : 0x4D147dCb984e6affEEC47e44293DA442580A3Ec0
+    Gas Service Address : 0xbE406F0189A0B4cf3A05C286473D23791Dd44Cc6
+Deploy the contract on both chains with the respective gateway and gas service addresses.
+
+Example Usage
+1. Deploy the contract on Avalanche Testnet:
+```javascript 
+npx hardhat deploy --network avalanche-testnet --constructor-args <gateway-address> <gas-service-address>
+```
+2. Send USDC from Avalanche Testnet to BNB Testnet:
+```javascript
+contract.sendUSDC{value: gasFee}("binance", "0xRecipientOnBNB", 100e6);
+```
 Below is a Solidity contract snippet that demonstrates how to process a gas payment request using Axelar GMP.
 See ```code_snippet.sol```
 

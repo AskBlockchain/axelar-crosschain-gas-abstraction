@@ -2,88 +2,92 @@
 pragma solidity ^0.8.0;
 
 import { AxelarExecutable } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/executable/AxelarExecutable.sol';
-import { IAxelarGateway } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IAxelarGateway.sol';
-import { IERC20 } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IERC20.sol';
 import { IAxelarGasService } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IAxelarGasService.sol';
+import { IERC20 } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/interfaces/IERC20.sol';
+import { SafeTokenTransfer, SafeTokenTransferFrom } from '@axelar-network/axelar-gmp-sdk-solidity/contracts/libs/SafeTransfer.sol';
 
-/**
- * @title Cross-Chain Gas Payment
- * @notice Allows users to pay gas fees on one blockchain using tokens from another.
- */
-contract CrossChainGasPayment is AxelarExecutable {
+contract USDCInterchainTransfer is AxelarExecutable {
+    // Address of the USDC token on Avalanche Testnet
+    address public constant USDC_AVAX_TESTNET = 0x204eEf60d7158653013158Bc1283860124249805;
+    IERC20 public immutable usdc;
+
+    // Address of the Axelar Gas Service
     IAxelarGasService public immutable gasService;
 
-    event GasPaymentProcessed(address indexed user, uint256 amount);
+    // Events
+    event USDCSent(string destinationChain, string destinationAddress, uint256 amount);
+    event USDCTransferred(address indexed sender, uint256 amount);
 
+    /**
+     * @notice Constructor to initialize the contract
+     * @param _gateway Address of the Axelar Gateway on the deployed chain
+     * @param _gasReceiver Address of the Axelar Gas Service on the deployed chain
+     */
     constructor(address _gateway, address _gasReceiver) AxelarExecutable(_gateway) {
         gasService = IAxelarGasService(_gasReceiver);
+        usdc = IERC20(USDC_AVAX_TESTNET);
     }
 
     /**
-     * @notice Initiates a cross-chain gas payment request.
-     * @param destinationChain Name of the destination chain (e.g., "Ethereum").
-     * @param destinationAddress Address on the destination chain where gas will be paid.
-     * @param symbol Token symbol (e.g., "USDC") used for payment.
-     * @param amount Amount of tokens to be sent for gas payment.
+     * @notice Sends USDC from Avalanche Testnet to BNB Testnet
+     * @param destinationChain Name of the destination chain (e.g., "binance")
+     * @param destinationAddress Address on the destination chain to receive the USDC
+     * @param amount Amount of USDC to transfer
      */
-    function payGasCrossChain(
-        string memory destinationChain,
-        string memory destinationAddress,
-        string memory symbol,
+    function sendUSDC(
+        string calldata destinationChain,
+        string calldata destinationAddress,
         uint256 amount
     ) external payable {
-        require(msg.value > 0, 'Gas payment in native token is required');
+        require(amount > 0, "Amount must be greater than zero");
 
-        // Fetch token address for the given symbol
-        address tokenAddress = gateway.tokenAddresses(symbol);
+        // Transfer USDC from the sender to this contract
+        SafeTokenTransferFrom.safeTransferFrom(usdc, msg.sender, address(this), amount);
 
-        // Transfer tokens from the user to this contract
-        IERC20(tokenAddress).transferFrom(msg.sender, address(this), amount);
+        // Approve the Axelar Gateway to spend the USDC
+        SafeTokenTransfer.safeApprove(usdc, address(gateway()), amount);
 
-        // Approve Axelar Gateway to spend the tokens
-        IERC20(tokenAddress).approve(address(gateway), amount);
-
-        // Pay for the cross-chain message execution using native gas
-        gasService.payNativeGasForContractCallWithToken{ value: msg.value }(
+        // Estimate and pay for the gas required for the cross-chain transfer
+        bytes memory payload = abi.encode(destinationAddress);
+        gasService.payNativeGasForContractCallWithToken{value: msg.value}(
             address(this),
             destinationChain,
             destinationAddress,
-            abi.encode(msg.sender, amount), // Payload includes user address and amount
-            symbol,
+            payload,
+            "USDC",
             amount,
             msg.sender
         );
 
-        // Send the cross-chain message with tokens
-        gateway.callContractWithToken(destinationChain, destinationAddress, abi.encode(msg.sender, amount), symbol, amount);
+        // Initiate the cross-chain transfer
+        gateway().callContractWithToken(destinationChain, destinationAddress, payload, "USDC", amount);
 
-        emit GasPaymentProcessed(msg.sender, amount);
+        emit USDCSent(destinationChain, destinationAddress, amount);
+        emit USDCTransferred(msg.sender, amount);
     }
 
     /**
-     * @notice Executes the gas payment logic on the destination chain.
-     * @dev Triggered automatically by Axelar relayers.
-     * @param payload Encoded message containing user address and amount.
-     * @param tokenSymbol Symbol of the token sent from the source chain.
-     * @param amount Amount of tokens sent from the source chain.
+     * @notice Executes the logic on the destination chain
+     * @param commandId Unique identifier for the command
+     * @param sourceChain Name of the source chain
+     * @param sourceAddress Address of the sender on the source chain
+     * @param payload Encoded data containing the destination address
      */
-    function _executeWithToken(
-        string calldata, // Source chain (not used here)
-        string calldata, // Source address (not used here)
-        bytes calldata payload,
-        string calldata tokenSymbol,
-        uint256 amount
+    function _execute(
+        bytes32 commandId,
+        string calldata sourceChain,
+        string calldata sourceAddress,
+        bytes calldata payload
     ) internal override {
-        (address user, uint256 paymentAmount) = abi.decode(payload, (address, uint256));
+        // Decode the payload to get the destination address
+        string memory destinationAddress = abi.decode(payload, (string));
 
-        // Convert bridged tokens into the native gas token on the destination chain
-        address tokenAddress = gateway.tokenAddresses(tokenSymbol);
-        IERC20(tokenAddress).approve(address(someDEX), paymentAmount); // Approve DEX for swapping
-        someDEX.swapTokensForNative(tokenAddress, paymentAmount); // Swap tokens for native gas
+        // Mint or transfer the USDC to the recipient on the destination chain
+        // This assumes the destination chain has a corresponding USDC contract
+        // and the Axelar Gateway handles the minting process.
+        uint256 amount = gateway().tokenBalance("USDC", address(this));
+        SafeTokenTransfer.safeTransfer(usdc, destinationAddress, amount);
 
-        // Use the acquired native gas to pay for the user's transaction
-        // (Logic for paying gas can be implemented here)
-
-        emit GasPaymentProcessed(user, paymentAmount);
+        emit USDCTransferred(sourceAddress, amount);
     }
 }
